@@ -282,7 +282,9 @@ RealDevice::RealDevice(int x, int y) {
 	nonlinearIV = false;	// Consider I-V nonlinearity or not (Currently for cross-point array only)
 	NL = 10;    // I-V nonlinearity in write scheme (the current ratio between Vw and Vw/2), assuming for the LTP side
 
-	//드리프트 효과를 위한 cell의 변수 생성 : AnalogNVM class에 생성함
+	//driftCoeff variation variables
+	const double driftsigma = 0.0;
+	gaussian_dist6 = new std::normal_distribution<double>(0, driftsigma);
 	
 
 
@@ -445,21 +447,23 @@ void RealDevice::Write(double deltaWeightNormalized, double weight, double minWe
 	conductancePrev = conductance;
 	conductance = conductanceNew;
 
-	//단순화된 드리프트 효과 (t를 t0의 배수로 표현)
-	double driftCoeff;
-	double driftCoeffDepend = 0.2;
-	double r;
-	r = 1e+02;
-
-	if (conductance > 2e-06) {
-		driftCoeff = 0.0;
-	}
-		else {
-			driftCoeff = driftCoeffDepend * log(0.5e-06 / conductance) + 0.1;
-	}
+	//Statistic drift model
+	//dirftsigma는 RealDevice::RealDevice에 정의
+	double driftCoeff = 0.031;
+	const double maxdriftCoeff = 0.1;
+	const double mindriftCoeff = 0.0;
 	
-	if(driftCoeff < 0.0) driftCoeff = 0.0;
-	if(driftCoeff > 0.1) driftCoeff = 0.1;
+	double r;
+	r = 1e+07;
+
+	std::mt19937 localGen;	// It's OK not to use the external gen, since here the device-to-device vairation is a one-time deal
+	localGen.seed(std::time(0));
+
+	driftCoeff += (*gaussian_dist6)(localGen);// Absolute variation
+
+	
+	if(driftCoeff < mindriftCoeff) driftCoeff = mindriftCoeff;
+	if(driftCoeff > maxdriftCoeff) driftCoeff = maxdriftCoeff;
 
 	conductance *= pow((1 / r), driftCoeff);
 }
